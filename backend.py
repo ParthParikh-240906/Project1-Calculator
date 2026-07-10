@@ -11,6 +11,12 @@ def calculate():
     operation = data.get('operation')
     allowed_operations = ['add', 'sub', 'mul', 'div', 'sqrt', 'pow']
 
+    try:
+        num1 = float(num1)
+        num2 = float(num2)
+    except (TypeError, ValueError):
+        return jsonify({"ERROR": "num1 and num2 must be valid numbers"}), 400
+
     if operation not in allowed_operations:
         return jsonify({
             "ERROR": "Invalid operation choice.",
@@ -33,8 +39,6 @@ def calculate():
             result = [num1 ** 0.5 , num2 ** 0.5]
     elif operation == 'pow' :
         result = num1 ** num2
-    else:
-        return jsonify({"ERROR": "Invalid operations"}), 400
     return jsonify({"result": result})
 
 if __name__ == '__main__':
