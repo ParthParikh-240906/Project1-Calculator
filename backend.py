@@ -1,8 +1,5 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
-
 app = Flask(__name__)
-CORS(app)  # allows frontend.html (opened as a local file) to call this API
 
 @app.route('/calculate', methods=['POST'])
 def calculate():
@@ -18,14 +15,6 @@ def calculate():
             "ERROR": "Invalid operation choice.",
             "Message": "The correct operations are: add, sub, mul, div, sqrt, pow."
         }), 400
-
-    # sqrt only needs num1, everything else needs num1 and num2
-    try:
-        num1 = float(num1)
-        if operation != 'sqrt':
-            num2 = float(num2)
-    except (TypeError, ValueError):
-        return jsonify({"ERROR": "num1 and num2 must be valid numbers"}), 400
 
     if operation == 'add':
         result = num1 + num2
@@ -43,10 +32,6 @@ def calculate():
         result = num1 ** 0.5
     elif operation == 'pow':
         result = num1 ** num2
-
-    # return whole numbers as ints instead of floats (5.0 -> 5)
-    if isinstance(result, float) and result.is_integer():
-        result = int(result)
 
     return jsonify({"result": result})
 
