@@ -1,37 +1,89 @@
-import re
-import speech_recognition as sr
 import streamlit as st
 
 st.set_page_config(
     page_title="Calculator",
     layout="centered",
-    menu_items={
-        "About": "Note: Mic input can only be used for numbers, not operators (+, -, etc.)."
-    },
 )
+
+# ---- Responsive CSS: smaller keys on mobile, unchanged on laptop/desktop ----
+st.markdown(
+    """
+    <style>
+    /* Force column rows to stay horizontal on mobile instead of Streamlit's
+       default behavior of stacking columns vertically on narrow screens */
+    @media (max-width: 640px) {
+        div[data-testid="stHorizontalBlock"] {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: 0.3rem !important;
+        }
+        div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+            width: auto !important;
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
+        }
+    }
+
+    /* Mobile: screens narrower than 480px get compact buttons */
+    @media (max-width: 480px) {
+        div[data-testid="stButton"] button {
+            padding: 0.25rem 0.4rem !important;
+            font-size: 0.85rem !important;
+            min-height: 2.2rem !important;
+            height: 2.2rem !important;
+        }
+        /* Number keys (0-9, .) are extra small on mobile */
+        div[class*="st-key-num_"] div[data-testid="stButton"] button {
+            padding: 0.15rem 0.25rem !important;
+            font-size: 0.75rem !important;
+            min-height: 1.8rem !important;
+            height: 1.8rem !important;
+        }
+        div[data-testid="stTextInput"] input {
+            font-size: 1.1rem !important;
+            padding: 0.3rem !important;
+        }
+    }
+
+    /* Desktop / laptop (>= 481px): keep default Streamlit sizing */
+    @media (min-width: 481px) {
+        div[data-testid="stButton"] button {
+            font-size: 1rem;
+            padding: 0.5rem 1rem;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 def add(a, b):
     return a + b
 
+
 def sub(a, b):
     return a - b
 
+
 def mul(a, b):
     return a * b
+
 
 def div(a, b):
     if b == 0:
         raise ZeroDivisionError("Cannot divide by zero")
     return a / b
 
+
 def power(a, b):
     return a ** b
+
 
 def sqrt(a):
     if a < 0:
         raise ValueError("Cannot take square root of a negative number")
     return a ** 0.5
-
 
 
 if "num1" not in st.session_state:
@@ -44,6 +96,12 @@ if "typing_second" not in st.session_state:
     st.session_state.typing_second = False
 if "display" not in st.session_state:
     st.session_state.display = "0"
+if "history" not in st.session_state:
+    st.session_state.history = []
+if "show_history" not in st.session_state:
+    st.session_state.show_history = False
+
+OP_SYMBOLS = {"add": "+", "sub": "-", "mul": "*", "div": "/", "pow": "^"}
 
 
 def press_number(digit):
@@ -104,6 +162,8 @@ def press_equals():
             result = power(n1, n2)
 
         result = format_result(result)
+        symbol = OP_SYMBOLS.get(s.operation, s.operation)
+        s.history.append(f"{format_operand(n1)} {symbol} {format_operand(n2)} = {result}")
         s.display = str(result)
         s.num1 = str(result)
         s.num2 = ""
@@ -119,37 +179,34 @@ def format_result(result):
     return round(result, 8)
 
 
-def process_voice_input(audio_value):
-    recognizer = sr.Recognizer()
-    with sr.AudioFile(audio_value) as source:
-        audio_data = recognizer.record(source)
+def format_operand(n):
+    return int(n) if float(n).is_integer() else n
 
-    try:
-        text = recognizer.recognize_google(audio_data)
-    except sr.UnknownValueError:
-        st.warning("Couldn't understand that. Try speaking the digits clearly.")
-        return
-    except sr.RequestError:
-        st.warning("Speech recognition service unavailable. Check your internet connection.")
-        return
 
-    digits_only = re.sub(r"[^0-9.]", "", text)
-    if digits_only == "":
-        st.warning(f"Heard \"{text}\" — no numbers found in that.")
-        return
-
-    for char in digits_only:
-        press_number(char)
-    st.rerun()
+def press_clear_history():
+    st.session_state.history = []
 
 
 # ---- UI ----
 st.title("Calculator")
-st.text_input("Display", value=st.session_state.display, disabled=True, label_visibility="collapsed")
 
-audio_value = st.audio_input("Speak a number (digits only)")
-if audio_value is not None:
-    process_voice_input(audio_value)
+if st.button("📜 History", key="btn_toggle_history", use_container_width=True):
+    st.session_state.show_history = not st.session_state.show_history
+    st.rerun()
+
+if st.session_state.show_history:
+    with st.container(border=True):
+        if st.button("Clear History", key="btn_clear_history", use_container_width=True):
+            press_clear_history()
+            st.rerun()
+
+        if st.session_state.history:
+            for item in reversed(st.session_state.history):
+                st.text(item)
+        else:
+            st.caption("No calculations yet.")
+
+st.text_input("Display", value=st.session_state.display, disabled=True, label_visibility="collapsed")
 
 rows = [
     [("C", "clear"), ("\u221A", "sqrt"), ("^", "pow"), ("/", "div")],
@@ -162,7 +219,14 @@ rows = [
 for row in rows:
     cols = st.columns(len(row))
     for col, (label, kind) in zip(cols, row):
-        if col.button(label, key=f"btn_{label}_{kind}", use_container_width=True):
+        # Number buttons get wrapped in a keyed container so mobile CSS
+        # can target them separately from operator/function buttons.
+        if kind == "num":
+            target = col.container(key=f"num_{label}")
+        else:
+            target = col
+
+        if target.button(label, key=f"btn_{label}_{kind}", use_container_width=True):
             if kind == "num":
                 press_number(label)
             elif kind == "clear":
