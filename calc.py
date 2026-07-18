@@ -135,6 +135,7 @@ def press_sqrt():
     try:
         result = sqrt(float(target))
         result = format_result(result)
+        st.session_state.history.append(f"\u221A({format_operand(float(target))}) = {result}")
         if st.session_state.typing_second:
             st.session_state.num2 = str(result)
         else:
